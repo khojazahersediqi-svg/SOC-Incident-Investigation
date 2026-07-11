@@ -1,13 +1,13 @@
 # SOC-Incident-Investigation
 This project simulates a real-world security operations center (SOC) investigation,covering alert triage,log analysis,threat validation,IOC analysis,MITRE ATT&amp;Ck mapping, root cause analysis,and incident documentation.
 
-# 🛡️ SOC Incident Investigation & Threat Analysis
+# SOC Incident Investigation & Threat Analysis
 
-## 📌 Project Overview
+## Project Overview
 
 This project simulates a Security Operations Center (SOC) incident investigation. It demonstrates the process of analyzing security alerts, investigating suspicious events, identifying Indicators of Compromise (IOCs), building an incident timeline, mapping attacker behavior to MITRE ATT&CK, and documenting investigation findings.
 
-## 🎯 Project Objectives
+## Project Objectives
 
 - Analyze security alerts
 - Perform alert triage
