@@ -19,7 +19,7 @@ This project simulates a Security Operations Center (SOC) incident investigation
 - Map attacker behavior to MITRE ATT&CK
 - Document incident findings
 
-## 🔍 Investigation Workflow
+## Investigation Workflow
 
 Alert Detection → Triage → Log Analysis → IOC Identification → Timeline Analysis → MITRE ATT&CK Mapping → Root Cause Analysis → Incident Reporting
 
@@ -45,7 +45,7 @@ Attacker behavior identified during the investigation is mapped to relevant MITR
 
 ![Final Report](Screenshots/final-report.png)
 
-## 🛠️ Skills Demonstrated
+## Skills Demonstrated
 
 SOC Operations  
 Incident Investigation  
