@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOC Incident Investigation Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#070B14; --surface:#0D1321; --surface2:#111827; --surface3:#1A2236;
+  --border:#1E2D45; --border-glow:#2563EB33;
+  --blue:#2563EB; --blue-bright:#3B82F6; --blue-dim:#1D4ED8;
+  --cyan:#06B6D4; --amber:#F59E0B; --red:#EF4444; --orange:#F97316; --green:#10B981;
+  --text:#E2E8F0; --text-muted:#64748B; --text-dim:#94A3B8;
+  --mono:'JetBrains Mono',monospace; --sans:'Inter',sans-serif;
+  --r:6px; --rl:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;line-height:1.5;overflow:hidden}
+
+/* LAYOUT */
+.app{display:grid;grid-template-columns:220px 1fr 320px;grid-template-rows:52px 1fr;height:100vh}
+
+/* TOPBAR */
+.topbar{grid-column:1/-1;display:flex;align-items:center;padding:0 20px;background:var(--surface);border-bottom:1px solid var(--border);gap:14px}
+.logo{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:13px;font-weight:600;color:var(--blue-bright);letter-spacing:.05em;white-space:nowrap}
+.pulse{width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse-ring 2s ease-out infinite}
+@keyframes pulse-ring{0%{box-shadow:0 0 0 0 #10B98166}70%{box-shadow:0 0 0 8px #10B98100}100%{box-shadow:0 0 0 0 #10B98100}}
+.tdiv{width:1px;height:24px;background:var(--border)}
+.tmeta{font-family:var(--mono);font-size:11px;color:var(--text-muted)}
+.tmeta span{color:var(--text-dim)}
+.tspacer{flex:1}
+.tclock{font-family:var(--mono);font-size:12px;color:var(--text-dim);padding:4px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r)}
+
+/* BADGE */
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:100px;font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase}
+.badge-critical{background:#EF444420;color:var(--red);border:1px solid #EF444440}
+.badge-high{background:#F9731620;color:var(--orange);border:1px solid #F9731640}
+.badge-medium{background:#F59E0B20;color:var(--amber);border:1px solid #F59E0B40}
+.badge-low{background:#10B98120;color:var(--green);border:1px solid #10B98140}
+.badge-info{background:#2563EB20;color:var(--blue-bright);border:1px solid #2563EB40}
+
+/* SIDEBAR */
+.sidebar{background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;padding:16px 0}
+.s-section{padding:0 12px;margin-bottom:20px}
+.s-label{font-family:var(--mono);font-size:10px;font-weight:600;color:var(--text-muted);letter-spacing:.12em;text-transform:uppercase;padding:0 8px;margin-bottom:6px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:8px;border-radius:var(--r);cursor:pointer;color:var(--text-muted);font-size:12.5px;font-weight:500;transition:all .15s;border:1px solid transparent}
+.nav-item:hover{background:var(--surface3);color:var(--text-dim)}
+.nav-item.active{background:#2563EB15;color:var(--blue-bright);border-color:#2563EB30}
+.nav-icon{font-size:14px;width:18px;text-align:center}
+.nav-count{margin-left:auto;font-family:var(--mono);font-size:10px;padding:1px 6px;border-radius:100px;background:var(--surface3);color:var(--text-muted)}
+.nav-item.active .nav-count{background:#2563EB30;color:var(--blue-bright)}
+
+/* INCIDENT CARDS */
+.inc-card{margin:0 12px 6px;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);cursor:pointer;transition:all .15s;border-left:3px solid transparent}
+.inc-card:hover{border-color:var(--border-glow);background:var(--surface3)}
+.inc-card.active{border-left-color:var(--blue-bright);background:#2563EB0A}
+.inc-card.CRITICAL{border-left-color:var(--red)}.inc-card.HIGH{border-left-color:var(--orange)}.inc-card.MEDIUM{border-left-color:var(--amber)}.inc-card.LOW{border-left-color:var(--green)}
+.inc-id{font-family:var(--mono);font-size:10px;color:var(--text-muted)}
+.inc-title{font-size:12px;font-weight:500;color:var(--text);margin:2px 0;line-height:1.3}
+.inc-meta{display:flex;align-items:center;justify-content:space-between;margin-top:4px}
+.inc-src{font-family:var(--mono);font-size:10px;color:var(--text-muted)}
+
+/* MAIN */
+.main{overflow-y:auto;background:var(--bg);padding:20px;display:flex;flex-direction:column;gap:16px}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden}
+.panel-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface2)}
+.panel-title{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--text-dim);letter-spacing:.08em;text-transform:uppercase;display:flex;align-items:center;gap:8px}
+.panel-title::before{content:'';width:3px;height:14px;background:var(--blue);border-radius:2px}
+.panel-body{padding:16px}
+
+/* INCIDENT HEADER */
+.inc-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.inc-title-block h1{font-size:18px;font-weight:600;color:var(--text);margin-bottom:4px}
+.meta-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:6px}
+.meta-chip{font-family:var(--mono);font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:5px}
+.meta-chip span{color:var(--text-dim)}
+
+/* SCORE RING */
+.score-ring{position:relative;width:80px;height:80px;flex-shrink:0}
+.score-ring svg{transform:rotate(-90deg)}
+.ring-label{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ring-num{font-family:var(--mono);font-size:20px;font-weight:700;line-height:1}
+.ring-sub{font-family:var(--mono);font-size:9px;color:var(--text-muted);letter-spacing:.06em;text-transform:uppercase;margin-top:2px}
+
+/* LOG INPUT */
+textarea#log-input{width:100%;min-height:160px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:var(--mono);font-size:11.5px;line-height:1.7;padding:14px;resize:vertical;outline:none;transition:border-color .15s}
+textarea#log-input:focus{border-color:var(--blue);box-shadow:0 0 0 3px #2563EB15}
+textarea#log-input::placeholder{color:var(--text-muted)}
+.input-actions{display:flex;align-items:center;gap:10px;margin-top:10px}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:7px;padding:8px 18px;border-radius:var(--r);font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.04em;cursor:pointer;border:none;transition:all .15s;white-space:nowrap}
+.btn-primary{background:var(--blue);color:#fff}.btn-primary:hover{background:var(--blue-bright)}
+.btn-secondary{background:var(--surface2);color:var(--text-dim);border:1px solid var(--border)}.btn-secondary:hover{background:var(--surface3);color:var(--text)}
+.btn-ghost{background:transparent;color:var(--text-muted);border:1px solid var(--border)}.btn-ghost:hover{color:var(--text);border-color:var(--text-muted)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* IOC GRID */
+.ioc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+.ioc-cat{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:12px}
+.ioc-cat-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.ioc-cat-name{font-family:var(--mono);font-size:10px;font-weight:600;color:var(--cyan);text-transform:uppercase;letter-spacing:.08em}
+.ioc-cnt{font-family:var(--mono);font-size:10px;color:var(--text-muted);background:var(--surface3);padding:1px 6px;border-radius:100px}
+.ioc-item{font-family:var(--mono);font-size:11px;color:var(--text-dim);padding:3px 0;border-bottom:1px solid var(--border);word-break:break-all}
+.ioc-item:last-child{border-bottom:none}
+.ioc-empty{font-family:var(--mono);font-size:11px;color:var(--text-muted);font-style:italic}
+
+/* MITRE */
+.mitre-list{display:flex;flex-direction:column;gap:8px}
+.mitre-card{display:flex;align-items:flex-start;gap:12px;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);transition:border-color .15s}
+.mitre-card:hover{border-color:#2563EB40}
+.mitre-id{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--blue-bright);background:#2563EB15;border:1px solid #2563EB30;border-radius:4px;padding:3px 8px;white-space:nowrap;text-decoration:none}
+.mitre-id:hover{background:#2563EB30}
+.mitre-info{flex:1;min-width:0}
+.mitre-name{font-size:13px;font-weight:600;color:var(--text)}
+.mitre-tactic{font-family:var(--mono);font-size:10px;color:var(--amber);margin-top:1px;text-transform:uppercase;letter-spacing:.06em}
+.mitre-desc{font-size:12px;color:var(--text-muted);margin-top:4px;line-height:1.4}
+
+/* TIMELINE */
+.timeline{display:flex;flex-direction:column}
+.tl-event{display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)}
+.tl-event:last-child{border-bottom:none}
+.tl-sev{width:4px;border-radius:2px;flex-shrink:0;background:var(--border)}
+.tl-sev.CRITICAL{background:var(--red)}.tl-sev.HIGH{background:var(--orange)}.tl-sev.MEDIUM{background:var(--amber)}.tl-sev.INFO{background:var(--border)}
+.tl-ts{font-family:var(--mono);font-size:10.5px;color:var(--text-muted);white-space:nowrap;min-width:145px;padding-top:1px}
+.tl-line{font-family:var(--mono);font-size:11.5px;color:var(--text-dim);line-height:1.5;word-break:break-word}
+
+/* RIGHT PANEL */
+.right-panel{border-left:1px solid var(--border);background:var(--surface);overflow-y:auto;display:flex;flex-direction:column}
+.rp-header{padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface2);font-family:var(--mono);font-size:11px;font-weight:600;color:var(--text-dim);letter-spacing:.08em;text-transform:uppercase;display:flex;align-items:center;justify-content:space-between}
+.live-dot{width:6px;height:6px;background:var(--green);border-radius:50%;animation:blink 1.5s step-end infinite}
+@keyframes blink{50%{opacity:0}}
+.stat-row{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);border-bottom:1px solid var(--border)}
+.stat-cell{background:var(--surface);padding:14px 16px;text-align:center}
+.stat-val{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--text);line-height:1}
+.stat-val.red{color:var(--red)}.stat-val.orange{color:var(--orange)}.stat-val.amber{color:var(--amber)}.stat-val.green{color:var(--green)}
+.stat-lbl{font-family:var(--mono);font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-top:3px}
+.feed-item{padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+.feed-item:hover{background:var(--surface2)}
+.feed-item-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:3px}
+.feed-item-id{font-family:var(--mono);font-size:10px;color:var(--blue-bright)}
+.feed-item-title{font-size:12px;color:var(--text-dim);line-height:1.3}
+
+/* TABS */
+#results{display:none}
+.tabs{display:flex;gap:2px;padding:0 16px;background:var(--surface2);border-bottom:1px solid var(--border)}
+.tab{padding:10px 14px;font-family:var(--mono);font-size:11px;font-weight:500;color:var(--text-muted);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;letter-spacing:.04em}
+.tab:hover{color:var(--text-dim)}.tab.active{color:var(--blue-bright);border-bottom-color:var(--blue-bright)}
+.tab-pane{display:none}.tab-pane.active{display:block}
+
+/* REPORT */
+.report-out{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:16px;font-family:var(--mono);font-size:11.5px;line-height:1.7;color:var(--text-dim);white-space:pre-wrap;max-height:420px;overflow-y:auto}
+
+/* SPINNER */
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--blue-bright);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* EMPTY */
+.empty{text-align:center;padding:40px 20px;color:var(--text-muted)}
+.empty-icon{font-size:32px;margin-bottom:10px;opacity:.4}
+.empty-text{font-family:var(--mono);font-size:12px}
+
+/* UTILS */
+.fr{display:flex;align-items:center;gap:8px}.fg{flex:1}
+.mono{font-family:var(--mono)}.sm{font-size:11px}.muted{color:var(--text-muted)}
+.mt1{margin-top:4px}.mt2{margin-top:8px}
+
+/* SCROLLBARS */
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}::-webkit-scrollbar-thumb:hover{background:var(--text-muted)}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- TOPBAR -->
+<header class="topbar">
+  <div class="logo"><div class="pulse"></div>SOC INVESTIGATION PLATFORM</div>
+  <div class="tdiv"></div>
+  <div class="tmeta">ANALYST <span>Khwaja Zaher Sediqi</span></div>
+  <div class="tmeta">FRAMEWORK <span>MITRE ATT&amp;CK v14</span></div>
+  <div class="tspacer"></div>
+  <div class="tclock" id="clock">--:--:-- UTC</div>
+</header>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="s-section">
+    <div class="s-label">Navigation</div>
+    <div class="nav-item active"><span class="nav-icon">🔍</span>Investigations<span class="nav-count" id="nav-count">0</span></div>
+    <div class="nav-item"><span class="nav-icon">📊</span>Dashboard</div>
+    <div class="nav-item"><span class="nav-icon">🎯</span>MITRE ATT&amp;CK</div>
+    <div class="nav-item"><span class="nav-icon">📋</span>Reports</div>
+  </div>
+  <div class="s-section"><div class="s-label">Active Incidents</div></div>
+  <div id="inc-list"></div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+
+  <!-- Overview -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title">Incident Overview</div>
+      <span class="badge badge-info mono sm" id="status-badge">NO INCIDENT SELECTED</span>
+    </div>
+    <div class="panel-body">
+      <div id="overview-empty" class="empty">
+        <div class="empty-icon">🛡️</div>
+        <div class="empty-text">Select an incident from the sidebar or paste logs below to begin investigation</div>
+      </div>
+      <div id="overview-detail" style="display:none">
+        <div class="inc-header">
+          <div class="inc-title-block">
+            <h1 id="ov-title">—</h1>
+            <div class="meta-row">
+              <div class="meta-chip">ID <span id="ov-id">—</span></div>
+              <div class="meta-chip">SOURCE <span id="ov-source">—</span></div>
+              <div class="meta-chip">ASSIGNED <span id="ov-assigned">—</span></div>
+              <div class="meta-chip">CREATED <span id="ov-created">—</span></div>
+            </div>
+            <div class="meta-row mt1" id="ov-tags"></div>
+          </div>
+          <div class="score-ring">
+            <svg width="80" height="80" viewBox="0 0 80 80">
+              <circle cx="40" cy="40" r="32" fill="none" stroke="#1E2D45" stroke-width="6"/>
+              <circle id="score-arc" cx="40" cy="40" r="32" fill="none"
+                stroke="#2563EB" stroke-width="6" stroke-linecap="round"
+                stroke-dasharray="201" stroke-dashoffset="201"
+                style="transition:stroke-dashoffset 1s ease,stroke .3s"/>
+            </svg>
+            <div class="ring-label">
+              <div class="ring-num" id="score-num" style="color:#2563EB">0</div>
+              <div class="ring-sub">THREAT</div>
+            </div>
+          </div>
+        </div>
+        <div class="mt2" style="color:var(--text-dim);font-size:13px;line-height:1.5" id="ov-summary"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Log Input -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title">Log Analysis</div>
+      <span class="mono sm muted" id="char-count">0 chars</span>
+    </div>
+    <div class="panel-body">
+      <textarea id="log-input"
+        placeholder="Paste raw logs here — syslog, Windows Event, firewall, EDR, IDS/IPS...&#10;&#10;Supports: timestamps · IP addresses · domains · MD5/SHA1/SHA256 hashes · CVEs · registry keys · file paths"></textarea>
+      <div class="input-actions">
+        <button class="btn btn-primary" onclick="runInvestigation()" id="inv-btn">▶ Run Investigation</button>
+        <button class="btn btn-secondary" onclick="loadSample()">Load Sample</button>
+        <button class="btn btn-ghost" onclick="clearAll()">Clear</button>
+        <div class="fg"></div>
+        <span class="mono sm muted" id="inv-status"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div class="panel" id="results">
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('iocs',this)">IOCs</div>
+      <div class="tab" onclick="switchTab('mitre',this)">MITRE ATT&amp;CK</div>
+      <div class="tab" onclick="switchTab('timeline',this)">Timeline</div>
+      <div class="tab" onclick="switchTab('report',this)">Report</div>
+    </div>
+    <div id="pane-iocs" class="tab-pane active panel-body"><div class="ioc-grid" id="ioc-grid"></div></div>
+    <div id="pane-mitre" class="tab-pane panel-body"><div class="mitre-list" id="mitre-list"></div></div>
+    <div id="pane-timeline" class="tab-pane panel-body"><div class="timeline" id="tl-list"></div></div>
+    <div id="pane-report" class="tab-pane panel-body">
+      <div class="fr" style="margin-bottom:12px">
+        <button class="btn btn-primary" onclick="generateReport()" id="rpt-btn">Generate Report</button>
+        <button class="btn btn-ghost" onclick="copyReport()">Copy</button>
+      </div>
+      <div class="report-out" id="rpt-out">Run an investigation, then click Generate Report.</div>
+    </div>
+  </div>
+
+</main>
+
+<!-- RIGHT PANEL -->
+<aside class="right-panel">
+  <div class="rp-header"><span>Live Feed</span><div class="live-dot"></div></div>
+  <div class="stat-row">
+    <div class="stat-cell"><div class="stat-val red"    id="s-critical">0</div><div class="stat-lbl">Critical</div></div>
+    <div class="stat-cell"><div class="stat-val orange" id="s-high">0</div><div class="stat-lbl">High</div></div>
+    <div class="stat-cell"><div class="stat-val amber"  id="s-medium">0</div><div class="stat-lbl">Medium</div></div>
+    <div class="stat-cell"><div class="stat-val green"  id="s-closed">0</div><div class="stat-lbl">Closed</div></div>
+  </div>
+  <div id="feed"></div>
+</aside>
+
+</div>
+
+<script>
+// ─── State ──────────────────────────────────────────────────────────────────
+let INCIDENTS = [];
+let currentResult = null;
+
+// ─── Boot ───────────────────────────────────────────────────────────────────
+(async () => {
+  const r = await fetch('/api/incidents');
+  INCIDENTS = await r.json();
+  buildSidebar();
+  buildFeed();
+  document.getElementById('nav-count').textContent = INCIDENTS.length;
+})();
+
+// ─── Clock ───────────────────────────────────────────────────────────────────
+setInterval(() => {
+  document.getElementById('clock').textContent = new Date().toUTCString().split(' ')[4] + ' UTC';
+}, 1000);
+
+// ─── Sidebar ─────────────────────────────────────────────────────────────────
+function buildSidebar() {
+  document.getElementById('inc-list').innerHTML = INCIDENTS.map((inc, i) => `
+    <div class="inc-card ${inc.severity}" onclick="loadIncident(${i})" id="icard-${i}">
+      <div class="inc-id">${esc(inc.id)}</div>
+      <div class="inc-title">${esc(inc.title)}</div>
+      <div class="inc-meta">
+        <span class="inc-src">${esc(inc.source)}</span>
+        <span class="badge badge-${inc.severity.toLowerCase()}">${esc(inc.severity)}</span>
+      </div>
+    </div>`).join('');
+}
+
+// ─── Load Incident ───────────────────────────────────────────────────────────
+function loadIncident(i) {
+  const inc = INCIDENTS[i];
+  document.querySelectorAll('.inc-card').forEach((c,j) => c.classList.toggle('active', j===i));
+
+  document.getElementById('overview-empty').style.display  = 'none';
+  document.getElementById('overview-detail').style.display = 'block';
+  document.getElementById('ov-title').textContent    = inc.title;
+  document.getElementById('ov-id').textContent       = inc.id;
+  document.getElementById('ov-source').textContent   = inc.source;
+  document.getElementById('ov-assigned').textContent = inc.assigned_to;
+  document.getElementById('ov-created').textContent  = inc.created;
+  document.getElementById('ov-summary').textContent  = inc.summary;
+
+  const sb = document.getElementById('status-badge');
+  sb.textContent  = inc.status;
+  sb.className    = `badge badge-${inc.status==='ACTIVE'?'critical':inc.status==='INVESTIGATING'?'high':'medium'} mono sm`;
+
+  document.getElementById('ov-tags').innerHTML = inc.tags.map(t =>
+    `<span class="badge badge-info" style="font-size:10px;margin-right:4px">${esc(t)}</span>`).join('');
+
+  animateScore(inc.threat_score, inc.severity);
+  document.getElementById('log-input').value = inc.logs.trim();
+  updateCharCount();
+}
+
+function animateScore(score, severity) {
+  const arc = document.getElementById('score-arc');
+  const num = document.getElementById('score-num');
+  const circ = 2 * Math.PI * 32;
+  arc.style.strokeDashoffset = circ - (score / 100) * circ;
+  const col = {CRITICAL:'#EF4444',HIGH:'#F97316',MEDIUM:'#F59E0B',LOW:'#10B981'}[severity]||'#2563EB';
+  arc.style.stroke = col; num.style.color = col;
+  let cur = 0; const step = score / 40;
+  const t = setInterval(() => { cur = Math.min(cur+step, score); num.textContent = Math.round(cur); if(cur>=score) clearInterval(t); }, 25);
+}
+
+// ─── Char count ──────────────────────────────────────────────────────────────
+document.getElementById('log-input').addEventListener('input', updateCharCount);
+function updateCharCount() {
+  document.getElementById('char-count').textContent = document.getElementById('log-input').value.length.toLocaleString() + ' chars';
+}
+
+function clearAll() {
+  document.getElementById('log-input').value='';
+  document.getElementById('results').style.display='none';
+  document.getElementById('char-count').textContent='0 chars';
+  document.getElementById('inv-status').textContent='';
+}
+
+function loadSample() { if(INCIDENTS.length) loadIncident(0); }
+
+// ─── Investigation ────────────────────────────────────────────────────────────
+async function runInvestigation() {
+  const logs = document.getElementById('log-input').value.trim();
+  if(!logs){ alert('Paste some log data first.'); return; }
+  const btn = document.getElementById('inv-btn');
+  const st  = document.getElementById('inv-status');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Investigating…';
+  st.textContent = 'Running pipeline…';
+  try {
+    const res  = await fetch('/api/investigate', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ logs, incident_id: INCIDENTS[0]?.id || 'INC-MANUAL' })
+    });
+    const data = await res.json();
+    currentResult = data;
+    st.textContent = `✓ Score: ${data.threat_score}/100 (${data.severity})`;
+    animateScore(data.threat_score, data.severity);
+    renderIOCs(data.iocs);
+    renderMITRE(data.mitre_techniques);
+    renderTimeline(data.timeline);
+    document.getElementById('rpt-out').textContent = 'Click Generate Report.';
+    document.getElementById('results').style.display = 'block';
+  } catch(e) {
+    st.textContent = '✗ ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '▶ Run Investigation';
+  }
+}
+
+// ─── Render IOCs ─────────────────────────────────────────────────────────────
+function renderIOCs(iocs) {
+  const cats = [
+    {label:'IP Addresses',  items: iocs.ips},
+    {label:'Domains',       items: iocs.domains},
+    {label:'URLs',          items: iocs.urls},
+    {label:'SHA256 Hashes', items: iocs.hashes.sha256},
+    {label:'SHA1 Hashes',   items: iocs.hashes.sha1},
+    {label:'MD5 Hashes',    items: iocs.hashes.md5},
+    {label:'Emails',        items: iocs.emails},
+    {label:'CVEs',          items: iocs.cves},
+    {label:'Registry Keys', items: iocs.registry_keys},
+    {label:'File Paths',    items: iocs.file_paths},
+  ];
+  document.getElementById('ioc-grid').innerHTML = cats.map(c => `
+    <div class="ioc-cat">
+      <div class="ioc-cat-header"><span class="ioc-cat-name">${c.label}</span><span class="ioc-cnt">${c.items.length}</span></div>
+      ${c.items.length===0 ? '<div class="ioc-empty">None found</div>'
+        : c.items.slice(0,8).map(v=>`<div class="ioc-item">${esc(v)}</div>`).join('')
+          + (c.items.length>8 ? `<div class="ioc-empty">+${c.items.length-8} more</div>` : '')}
+    </div>`).join('');
+}
+
+// ─── Render MITRE ─────────────────────────────────────────────────────────────
+function renderMITRE(techniques) {
+  const el = document.getElementById('mitre-list');
+  if(!techniques.length){
+    el.innerHTML = '<div class="empty"><div class="empty-icon">🎯</div><div class="empty-text">No MITRE techniques identified.</div></div>';
+    return;
+  }
+  el.innerHTML = techniques.map(t => `
+    <div class="mitre-card">
+      <a class="mitre-id" href="${esc(t.url)}" target="_blank">${esc(t.id)}</a>
+      <div class="mitre-info">
+        <div class="mitre-name">${esc(t.name)}</div>
+        <div class="mitre-tactic">${esc(t.tactic)}</div>
+        <div class="mitre-desc">${esc(t.description)}</div>
+      </div>
+    </div>`).join('');
+}
+
+// ─── Render Timeline ──────────────────────────────────────────────────────────
+function renderTimeline(events) {
+  const el = document.getElementById('tl-list');
+  if(!events.length){
+    el.innerHTML = '<div class="empty"><div class="empty-icon">📅</div><div class="empty-text">No timeline events extracted.</div></div>';
+    return;
+  }
+  el.innerHTML = events.map(e => `
+    <div class="tl-event">
+      <div class="tl-sev ${esc(e.severity_hint)}"></div>
+      <div class="tl-ts">${esc(e.timestamp)}</div>
+      <div class="tl-line">${esc(e.raw_line)}</div>
+    </div>`).join('');
+}
+
+// ─── Report ───────────────────────────────────────────────────────────────────
+async function generateReport() {
+  if(!currentResult){ alert('Run an investigation first.'); return; }
+  const btn = document.getElementById('rpt-btn');
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Generating…';
+  try {
+    const r = await fetch('/api/report',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(currentResult)});
+    const d = await r.json();
+    document.getElementById('rpt-out').textContent = d.report;
+  } catch(e){ document.getElementById('rpt-out').textContent='Error: '+e.message; }
+  finally{ btn.disabled=false; btn.innerHTML='Generate Report'; }
+}
+
+async function copyReport(){
+  try{ await navigator.clipboard.writeText(document.getElementById('rpt-out').textContent); alert('Copied!'); }
+  catch{ alert('Select and copy manually.'); }
+}
+
+// ─── Tabs ─────────────────────────────────────────────────────────────────────
+function switchTab(name, el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('pane-'+name).classList.add('active');
+}
+
+// ─── Feed ─────────────────────────────────────────────────────────────────────
+function buildFeed(){
+  const counts={CRITICAL:0,HIGH:0,MEDIUM:0,CLOSED:0};
+  INCIDENTS.forEach(i=>{
+    if(i.status==='CLOSED') counts.CLOSED++;
+    else if(counts[i.severity]!==undefined) counts[i.severity]++;
+  });
+  document.getElementById('s-critical').textContent = counts.CRITICAL;
+  document.getElementById('s-high').textContent     = counts.HIGH;
+  document.getElementById('s-medium').textContent   = counts.MEDIUM;
+  document.getElementById('s-closed').textContent   = counts.CLOSED;
+  document.getElementById('feed').innerHTML = INCIDENTS.map((inc,i)=>`
+    <div class="feed-item" onclick="loadIncident(${i})">
+      <div class="feed-item-header">
+        <span class="feed-item-id">${esc(inc.id)}</span>
+        <span class="badge badge-${inc.severity.toLowerCase()}" style="font-size:9px">${esc(inc.severity)}</span>
+      </div>
+      <div class="feed-item-title">${esc(inc.title)}</div>
+      <div style="margin-top:3px">
+        <span class="badge badge-${inc.status==='ACTIVE'?'critical':inc.status==='INVESTIGATING'?'high':'medium'}" style="font-size:9px">${esc(inc.status)}</span>
+      </div>
+    </div>`).join('');
+}
+
+// ─── Utility ──────────────────────────────────────────────────────────────────
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+</script>
+</body>
+</html>
